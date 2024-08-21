@@ -1,0 +1,23 @@
+import pyodbc
+import pandas as pd
+import time
+start=time.time()
+
+conn = pyodbc.connect(r'Driver={SQL Server};'
+    r'Server=1221471-SQLCLUS;'
+    r'Database=NetworkData;'
+    r'Trusted_Connection=yes;')
+
+df=pd.read_csv(r'\\farmingdalefs\home\MZaid\My Documents\LN July 2024.csv')
+
+unique_values = df['UDC'].unique()
+#file name
+with pd.ExcelWriter(r'filename.xlsx', engine = 'openpyxl') as writer:
+    for value in unique_values:
+       sheet_name = value[:31]
+       subset_df = df[df['UDC']==value]
+       subset_df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+
+end=time.time()	
+print("time it take:", end-start)
