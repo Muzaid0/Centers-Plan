@@ -1,0 +1,63 @@
+import openpyxl
+import pyodbc
+import pandas as pd
+import sqlalchemy
+import math
+import numpy as np
+
+#sets up connection
+conn = pyodbc.connect(r'Driver={SQL Server};'
+    r'Server=1221471-SQLCLUS;'
+    r'Database=NetworkData;'
+    r'Trusted_Connection=yes;')
+#cursor to make queries
+cursor = conn.cursor()
+
+
+#for reading in csv files
+df = pd.read_csv(r'\\farmingdalefs\home\MZaid\My Documents\pcp panel.csv',keep_default_na=False)
+
+
+#adds date pulled column
+df["Date Pulled from CT"] = "8/15/2024"
+#replace blank spaces with null
+df.replace(r'^\s+$', np.nan, regex=True)
+#edits date pulled column
+df["Date Pulled from CT"] = pd.to_datetime(df["Date Pulled from CT"])
+df["Date Pulled from CT"]=df["Date Pulled from CT"].dt.strftime('%m/%d/%Y')
+df["Current Flag"] = "Y"
+
+
+#SQL Engine that allows for upload
+engine = sqlalchemy.create_engine('mssql+pyodbc://@1221471-SQLCLUS/NetworkData?trusted_connection=yes&driver=ODBC+Driver+17+for+SQL+Server')
+
+#Flag Change
+flagChange = "UPDATE [Weekly PCP Panel] SET [Current Flag] = 'N' WHERE [Current Flag] = 'Y'"
+cursor.execute(flagChange)
+conn.commit()
+
+
+#function for dividing file if file happens to be large
+#Uploads new file to table
+def chunker(seq, size):
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
+def insert_with_progress(df, engine, table="", schema=""):
+    con = engine.connect()
+    # Insert with progress
+    SQL_SERVER_CHUNK_LIMIT = 2099
+    chunksize = math.floor(SQL_SERVER_CHUNK_LIMIT / len(df.columns))
+    for chunk in chunker(df, chunksize):
+        chunk.to_sql(
+            name=table,
+            con=con,
+            if_exists="append",
+            index=False,
+            schema=schema,
+            method="multi",)
+
+#calling function
+insert_with_progress(df, engine, table="Weekly PCP Panel")
+
+
