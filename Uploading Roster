@@ -1,0 +1,88 @@
+# -*- coding: utf-8 -*-
+"""
+Spyder Editor
+
+This is a temporary script file.
+"""
+
+import openpyxl
+import pyodbc
+import pandas as pd
+import sqlalchemy
+import math
+import time
+import re
+ 
+start=time.time() # check for the time it takes to run roster, starting time
+# this part of the code is to update the tables using pandas
+
+
+
+#sets up connection
+conn = pyodbc.connect(r'Driver={SQL Server};'
+    r'Server=1221471-SQLCLUS;'
+    r'Database=NetworkData;'
+    r'Trusted_Connection=yes;')
+#cursor to make queries
+cursor = conn.cursor()
+ 
+ 
+#filename: Import_Roster.py
+
+# Update UDC here
+UDC="MONT"   
+tablename= UDC+" Roster"
+
+#for reading in csv file
+
+# Update filepath here
+df = pd.read_csv(r'\\farmingdalefs\home\MZaid\My Documents\MONT Roster.csv',keep_default_na=False)
+
+
+
+#for less complication with uploading, cast every column into STRING 
+df = df.applymap(str)
+
+df=df.fillna('')
+
+# First replace one or more spaces with a single space. This ensures that we remove extra inner spaces and outer spaces.
+df = df.applymap(lambda x: re.sub('\s+', ' ', x) if isinstance(x, str) else x) 
+ 
+# Then strip leading and trailing white spaces
+df = df.apply(lambda x: x.astype('string').str.strip() if isinstance(x, object) else x)
+
+df=df.where(pd.notnull(df),None)
+df=df.replace('',None)
+
+df = df.replace(r'\.0$','',regex=True)
+
+#SQL Engine that allows for upload
+engine = sqlalchemy.create_engine('mssql+pyodbc://@1221471-SQLCLUS/NetworkData?trusted_connection=yes&driver=ODBC+Driver+17+for+SQL+Server')
+
+ 
+#function for dividing file if file happens to be large
+#Uploads new file to table
+def chunker(seq, size):
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+ 
+ 
+def insert_with_progress(df, engine, table="", schema=""):
+    con = engine.connect()
+    # Insert with progress
+    SQL_SERVER_CHUNK_LIMIT = 2099
+    chunksize = math.floor(SQL_SERVER_CHUNK_LIMIT / len(df.columns))
+    for chunk in chunker(df, chunksize):
+        chunk.to_sql(
+            name=table,
+            con=con,
+            if_exists="append",
+            index=False,
+            schema=schema,
+            method="multi",)
+ 
+#calling function
+insert_with_progress(df, engine, table= tablename)
+
+
+end=time.time() # check for the time it takes to run roster, ending time
+print("time it take:", end-start)  # check for the time it takes to run roster, ending time
